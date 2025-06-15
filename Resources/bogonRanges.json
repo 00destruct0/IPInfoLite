@@ -1,0 +1,82 @@
+[
+  {
+    "Network": "0.0.0.0",
+    "PrefixLength": 8
+  },
+  {
+    "Network": "10.0.0.0",
+    "PrefixLength": 8
+  },
+  {
+    "Network": "100.64.0.0",
+    "PrefixLength": 10
+  },
+  {
+    "Network": "127.0.0.0",
+    "PrefixLength": 8
+  },
+  {
+    "Network": "169.254.0.0",
+    "PrefixLength": 16
+  },
+  {
+    "Network": "172.16.0.0",
+    "PrefixLength": 12
+  },
+  {
+    "Network": "192.0.2.0",
+    "PrefixLength": 24
+  },
+  {
+    "Network": "192.168.0.0",
+    "PrefixLength": 16
+  },
+  {
+    "Network": "198.18.0.0",
+    "PrefixLength": 15
+  },
+  {
+    "Network": "198.51.100.0",
+    "PrefixLength": 24
+  },
+  {
+    "Network": "203.0.113.0",
+    "PrefixLength": 24
+  },
+  {
+    "Network": "224.0.0.0",
+    "PrefixLength": 4
+  },
+  {
+    "Network": "240.0.0.0",
+    "PrefixLength": 4
+  },
+  {
+    "Network": "255.255.255.255",
+    "PrefixLength": 32
+  },
+  {
+    "Network": "::1",
+    "PrefixLength": 128
+  },
+  {
+    "Network": "fc00::",
+    "PrefixLength": 7
+  },
+  {
+    "Network": "fe80::",
+    "PrefixLength": 10
+  },
+  {
+    "Network": "ff00::",
+    "PrefixLength": 8
+  },
+  {
+    "Network": "::",
+    "PrefixLength": 128
+  },
+  {
+    "Network": "2001:db8::",
+    "PrefixLength": 32
+  }
+]
