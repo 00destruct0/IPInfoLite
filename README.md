@@ -80,7 +80,7 @@ Queries return a `[PSCustomObject]` with the following fields:
 - `ErrorDetails` (if failed)
 
 
-### Caching
+## Caching
 
 The IPInfoLite module includes a built-in caching system designed to minimize redundant API calls and improve performance. When an IP address is queried, its geolocation and ASN data are stored in an in-memory cache. Subsequent lookups for the same IP within the current session are served directly from the cache, avoiding additional calls to the IPinfo Lite API. This not only reduces network overhead but also ensures more responsive performance in batch or repeated queries. The cache can be inspected using the `Get-IPInfoLiteCache` function and cleared with `Clear-IPInfoLiteCache` as needed. Caching behavior is fully automatic and requires no configuration.
 
