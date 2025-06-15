@@ -40,7 +40,7 @@ If you require help with PowerShell 7 on the Windows platform Microsoft provides
 
 
 ## What’s New in v1.3.0
-- **Added support for country flags** — Including both emoji and Unicode representations of country flage, to enhance readability in reports and visual outputs.
+- **Added support for country flags** — Including both emoji and Unicode representations of country flags, to enhance readability in reports and visual outputs.
 - **Improved Resilience** — In response to the recent Google Cloud incident improved resilience has been introduced for network and API issues. 
 - **Performance** - General performance enhancements for Get-IPInfoLiteBatchParallel 
 
@@ -50,11 +50,11 @@ If you require help with PowerShell 7 on the Windows platform Microsoft provides
 
 | Function | Description | Example | 
 | ----------- | ----------- | ----------- |
-| `Get-IPInfoLiteEntry` | Retrieves country-level geolocation and ASN details for a single IP via the IPinfo Lite API | `Get-IPInfoLiteEntry -token "your_token_here" -ip "8.8.8.8"` |
-| `Get-IPInfoLiteBatch` | Retrieves geolocation and ASN information for multiple IP addresses sequentially via the IPinfo Lite API | `Get-IPInfoLiteBatch -Token "your_token_here" -ips @("8.8.8.8", "1.1.1.1")` |
-| `Get-IPInfoLiteBatchParallel` | Performs high-efficiency batch IP lookups in parallel using the IPinfo Lite API (**Requires PowerShell 7**) | `Get-IPInfoLiteBatchParallel -Token "your_token_here" -ips @("8.8.8.8", "1.1.1.1")` |
-| `Get-IPInfoLiteCache` |  Returns current statistics from the IPInfoLite query cache including entry count, cache hits, and evictions. | `Get-IPInfoLiteCache` |
-| `Clear-IPInfoLiteCache` | Removes all previously cached query results. Use this if you suspect the  module is returning outdated or incorrect information. | `Clear-IPInfoLiteCache` |
+| Get-IPInfoLiteEntry | Retrieves country-level geolocation and ASN details for a single IP via the IPinfo Lite API | `Get-IPInfoLiteEntry -token "your_token_here" -ip "8.8.8.8"` |
+| Get-IPInfoLiteBatch | Retrieves geolocation and ASN information for multiple IP addresses sequentially via the IPinfo Lite API | `Get-IPInfoLiteBatch -Token "your_token_here" -ips @("8.8.8.8", "1.1.1.1")` |
+| Get-IPInfoLiteBatchParallel | Performs high-efficiency batch IP lookups in parallel using the IPinfo Lite API (**Requires PowerShell 7**) | `Get-IPInfoLiteBatchParallel -Token "your_token_here" -ips @("8.8.8.8", "1.1.1.1")` |
+| Get-IPInfoLiteCache |  Returns current statistics from the IPInfoLite query cache including entry count, cache hits, and evictions. | `Get-IPInfoLiteCache` |
+| Clear-IPInfoLiteCache | Removes all previously cached query results. Use this if you suspect the  module is returning outdated or incorrect information. | `Clear-IPInfoLiteCache` |
 
         
        
