@@ -5,16 +5,16 @@ This is an open-source PowerShell module for interacting with the [IPinfo Lite A
 ## Features
 - Retrieve geolocation and ASN info for any IP address
 - Batch query multiple IP addresses
-- Built-in bogon IP detection
+- Enhanced Data Validation
 - In-memory query cache for performance
-- Structured output and enhanced error handling enable seamless integration into scripting environments, automation frameworks, and reporting systems
+- Structured output enabling seamless integration into scripting environments, automation frameworks, and reporting systems
 
 ## Getting Started
 
 You will need an IPinfo Lite API access token, which you can get by signing up for a free account at [https://ipinfo.io/signup](https://ipinfo.io/signup).
 
 ## Installation
-This module is tested on PowerShell 7.4.7 / 7.5.0 and Windows PowerShell 5.1.
+This module is tested on PowerShell 7 (Core) and Windows PowerShell 5.1 (Desktop). 
 
 The latest version of the module is always available on the Microsoft PowerShell Gallery:
 [https://www.powershellgallery.com/packages/IPInfoLite](https://www.powershellgallery.com/packages/IPInfoLite)
@@ -33,16 +33,22 @@ Install-Module -Name IPInfoLite -Scope CurrentUser -Force
 If you require help with PowerShell 7 on the Windows platform Microsoft provides installation instructions here [Microsoft Learn: Installing PowerShell on Windows](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5)
 
 
-## What’s New in v1.3.0
+## What’s New in v2.0.0
 
-- **Country Flag Support**  
-  Added support for country flags, including both emoji and Unicode representations, to enhance readability in reports and visual outputs.
+- **IPinfo Batch API Endpoint**  
+  `Get-IPInfoLiteBatch` Now uses the [IPinfo Batch API Endpoint](https://ipinfo.io/developers/advanced-usage), significantly improving performance when querying large sets of IP addresses.
 
-- **Improved Resilience**  
-  Introduced better handling for network and API-related issues in response to the recent Google Cloud incident, improving script stability.
+- **Improved API Request Handling**  
+  For [IPinfo Batch API](https://ipinfo.io/developers/advanced-usage) calls, the module now implements robust retry logic that automatically retries transient network and service errors (`502`, `503`, `504`) using exponential backoff with jitter to prevent retry storms, respects `HTTP 429` responses by honoring the server’s Retry-After header, and fails fast on unrecoverable `HTTP 500` errors. These improvements make API requests more resilient, reduce network congestion during transient failures.
 
-- **Performance Enhancements**  
-  General performance improvements to `Get-IPInfoLiteBatchParallel` for faster execution and better parallel processing.
+- **Enhanced Data Validation**  
+Previous versions only checked for bogon addresses. Version 2 introduces comprehensive pre-processing that automatically filters out invalid entries such as domain names, malformed IPs, and empty values before sending requests to the IPinfo Lite API. Deduplication has also been added to ensure a clean, optimized list of IP addresses is processed.
+
+- **Improved Error Handling**  
+Starting with version 2.0.0, IPInfoLite cmdlets follow PowerShell’s standard error model.
+Failed requests no longer appear as objects with SUCCESS = $false; instead, errors are emitted as structured ErrorRecord objects through the PowerShell error stream.
+
+
 
 
 
@@ -52,16 +58,14 @@ If you require help with PowerShell 7 on the Windows platform Microsoft provides
 | Function | Description | Example | 
 | ----------- | ----------- | ----------- |
 | Get-IPInfoLiteEntry | Retrieves country-level geolocation and ASN details for a single IP via the IPinfo Lite API. | `Get-IPInfoLiteEntry -token "your_token_here" -ip "8.8.8.8"` |
-| Get-IPInfoLiteBatch | Retrieves geolocation and ASN information for multiple IP addresses sequentially via the IPinfo Lite API. | `Get-IPInfoLiteBatch -Token "your_token_here" -ips @("8.8.8.8", "1.1.1.1")` |
-| Get-IPInfoLiteBatchParallel | Performs high-efficiency batch IP lookups in parallel using the IPinfo Lite API (**Requires PowerShell 7**). | `Get-IPInfoLiteBatchParallel -Token "your_token_here" -ips @("8.8.8.8", "1.1.1.1")` |
+| Get-IPInfoLiteBatch | Retrieves geolocation and ASN information for multiple IP addresses sequentially via the IPinfo Lite API. | `Get-IPInfoLiteBatch -Token "your_token_here" -ips @("8.8.8.8", "1.1.1.1") -ErrorVariable ipInfoErrors` |
 | Get-IPInfoLiteCache |  Returns current statistics from the IPInfoLite query cache including entry count, cache hits, and evictions. | `Get-IPInfoLiteCache` |
-| Clear-IPInfoLiteCache | Removes all previously cached query results. Use this if you suspect the  module is returning outdated or incorrect information. | `Clear-IPInfoLiteCache` |
+| Clear-IPInfoLiteCache | Removes all previously cached query results. Use this if you suspect the  module is returning outdated or incorrect information. Supports `-WhatIf` and `-Confirm` parameters. | `Clear-IPInfoLiteCache` |
 
 
 ## Output Structure
 Queries return a `[PSCustomObject]` with the following fields:
 
-- `Success` (true / false)
 - `IP`
 - `ASN`
 - `ASN_Name`
@@ -72,17 +76,22 @@ Queries return a `[PSCustomObject]` with the following fields:
 - `Country_Flag_Unicode`
 - `Continent`
 - `Continent_Code`
-- `CacheHit` (true/false/null)
-- `ErrorCode` (if failed)
-- `ErrorMessage` (if failed)
-- `ErrorTarget` (if failed)
-- `ErrorTimestamp` (if failed)
-- `ErrorDetails` (if failed)
+- `CacheHit` *(Boolean)*
 
+
+## IPInfoLiteBatchParallel
+`Get-IPInfoLiteBatchParallel` has been deprecated as of version 2.0.0. With the introduction of the official [IPinfo Batch API](https://ipinfo.io/developers/advanced-usage), performing parallel requests sequentially no longer provides meaningful performance gains. Version 1.3.0 of the module will remain available indefinitely for users who have integrated it into existing workflows; however, transitioning to `Get-IPInfoLiteBatch` is strongly recommended to take full advantage of the Batch API’s native performance and efficiency.
 
 ## Caching
 
-The IPInfoLite module includes a built-in caching system designed to minimize redundant API calls and improve performance. When an IP address is queried, its geolocation and ASN data are stored in an in-memory cache. Subsequent lookups for the same IP within the current session are served directly from the cache, avoiding additional calls to the IPinfo Lite API. This not only reduces network overhead but also ensures more responsive performance in batch or repeated queries. The cache can be inspected using the `Get-IPInfoLiteCache` function and cleared with `Clear-IPInfoLiteCache` as needed. Caching behavior is fully automatic and requires no configuration.
+The IPInfoLite module includes a built-in caching system that minimizes redundant API calls and improves performance. When an IP address is queried, its geolocation and ASN data are stored in an in-memory cache. Subsequent lookups for the same IP within the current session are served directly from the cache, reducing API load and improving response time.
+
+The cache can be managed using the following commands:
+
+- `Get-IPInfoLiteCache` - Returns current statistics about the query cache.
+- `Clear-IPInfoLiteCache` - Removes all previously cached query results.
+
+ Caching behavior is fully automatic and requires no configuration.
 
 
 ## License
