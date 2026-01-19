@@ -38,7 +38,7 @@ Install-Module -Name IPInfoLite -Scope CurrentUser -Force
 If you need assistance installing PowerShell 7 on Windows, refer to Microsoft’s official documentation [Microsoft Learn: Installing PowerShell on Windows](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5)
 
 
-## What’s New in v3.0.0
+## What’s New in v3.0.1
 
 - **LLM-Optimized Export**  
   `Export-IPInfoLiteLLM` exports IP geolocation data in JSONL format optimized for analysis with Large Language Models (Claude, ChatGPT, Gemini). This supports LLM driven threat detection, pattern recognition, and security analysis workflows. See the [LLM Analysis Guide](Resources/Prompts/README.md) for examples and prompt templates.

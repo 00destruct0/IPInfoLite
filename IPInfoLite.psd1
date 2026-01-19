@@ -1,6 +1,6 @@
 @{
     RootModule              = 'IPInfoLite.psm1'
-    ModuleVersion           = '3.0.0'
+    ModuleVersion           = '3.0.1'
     GUID                    = 'f6f32c7f-3e53-4d65-a821-9e4f3476a33d'
     Author                  = 'Ryan Terp'
     Copyright               = 'Copyright (c) 2025 Ryan Terp. Licensed under the MIT License.'
@@ -16,7 +16,7 @@
             Tags          = @('IP','geolocation','ASN','IPinfo','LLM','AI','Security')
             LicenseUri    = 'https://opensource.org/licenses/MIT'
             ProjectUri    = 'https://github.com/00destruct0/IPInfoLite'
-            ReleaseNotes  = 'v3.0.0: Added Export-IPInfoLiteLLM function for exporting IP geolocation data in JSONL format optimized for Large Language Model analysis (Claude, ChatGPT, Gemini). Enables AI-driven threat detection and pattern recognition. Fixed stray "True" values in Get-IPInfoLiteBatch output.'
+            ReleaseNotes  = 'v3.0.1: Added Export-IPInfoLiteLLM function for exporting IP geolocation data in JSONL format optimized for Large Language Model analysis (Claude, ChatGPT, Gemini). Enables AI-driven threat detection and pattern recognition. Fixed stray "True" values in Get-IPInfoLiteBatch output.'
         }
     }
 }  
