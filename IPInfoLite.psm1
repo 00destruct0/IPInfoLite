@@ -312,6 +312,205 @@ function Clear-IPInfoLiteCache {
     }
 }
 
+## Working 
+function Export-IPInfoLiteLLM {
+    <#
+    .SYNOPSIS
+        Exports IP geolocation data in JSONL format optimized for LLM analysis.
+    
+    .DESCRIPTION
+        Export-IPInfoLiteLLM converts IPInfoLite query results to JSONL (JSON Lines) 
+        format for analysis with Large Language Models such as Claude, ChatGPT, and 
+        Gemini. Each line contains a complete, self-contained JSON object with 
+        consistent schema and explicit null values.
+        
+        This format is optimized for:
+        - LLM-powered security analysis and threat detection
+        - Threat intelligence workflows
+        - RAG (Retrieval-Augmented Generation) systems
+        - Automated pattern detection and anomaly identification
+        - Integration with AI-powered security platforms        
+    
+    .PARAMETER InputObject
+        IP geolocation data from Get-IPInfoLiteBatch or Get-IPInfoLiteEntry.
+        Accepts PSCustomObject array via pipeline or parameter.
+    
+    .PARAMETER Path
+        The path where the JSONL output file will be saved. The directory must already
+        exist, but the file itself must not. This prevents accidental overwrites and
+        helps maintain data integrity when running automated workflows.
+    
+    .EXAMPLE
+        Get-IPInfoLiteBatch -Token $token -IPs @("8.8.8.8", "1.1.1.1") | Export-IPInfoLiteLLM -Path "results.jsonl"
+        
+        Exports IP geolocation data to JSONL format for LLM analysis.
+    
+    .EXAMPLE
+        # Pipeline usage
+        $results = Get-IPInfoLiteBatch -Token $token -IPs $ips
+        $results | Export-IPInfoLiteLLM -Path "analysis.jsonl"
+        
+        Retrieves IP data then exports for LLM analysis.
+    
+    .EXAMPLE
+        # Automation with timestamps
+        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        Get-IPInfoLiteBatch -Token $token -IPs $ips | Export-IPInfoLiteLLM -Path "ips_$timestamp.jsonl"
+        
+        Creates uniquely named files for automated workflows.
+    
+    .EXAMPLE
+        # Test without creating file
+        Get-IPInfoLiteBatch -Token $token -IPs $ips | Export-IPInfoLiteLLM -Path "results.jsonl" -WhatIf
+        
+        Shows what would happen without actually creating the file.
+    
+    .EXAMPLE
+        # Use with Claude, ChatGPT, or other LLMs
+        Get-IPInfoLiteBatch -Token $token -IPs $suspiciousIPs | Export-IPInfoLiteLLM -Path "threat_analysis.jsonl"
+        # Upload threat_analysis.jsonl to Claude Projects or ChatGPT for analysis
+    
+    .NOTES
+        JSONL Format Details:
+        - Each line is a complete, valid JSON object
+        - Consistent schema across all records
+        - Explicit null values for missing data (not omitted fields)
+        - No trailing commas or array wrappers
+        - Optimized for LLM consumption
+        - UTF-8 encoding without BOM
+        
+        WhatIf and Confirm Switch Support:
+        - Supports -WhatIf to preview operations without creating files
+        - Supports -Confirm for interactive confirmation prompts
+        
+        LLM Usage:
+        After exporting, upload the JSONL file to:
+        - Claude (Anthropic) via Claude.ai or Claude Projects
+        - ChatGPT (OpenAI) via web interface or API
+        - Gemini (Google) via Google AI Studio
+        - Custom RAG systems or AI security platforms
+        
+        For prompt templates and analysis examples, visit:
+        https://github.com/00destruct0/IPInfoLite/tree/main/Resources/Prompts
+    #>
+    
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(
+            Mandatory = $true,
+            ValueFromPipeline = $true,
+            Position = 0
+        )]
+        [PSCustomObject[]]$InputObject,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+    
+    begin {
+        # Validate that the directory exists
+        $directory = Split-Path -Path $Path -Parent
+        
+        # FIXED: Check if directory path is not empty/whitespace before validating
+        # This handles cases like "analysis.jsonl" where Split-Path returns ""
+        if (-not [string]::IsNullOrWhiteSpace($directory)) {
+            if (-not (Test-Path -Path $directory -PathType Container)) {
+                $errorRecord = New-ErrorRecord `
+                    -ErrorId 'DirectoryNotFound' `
+                    -Message "Directory does not exist: $directory. Please create the directory before exporting." `
+                    -TargetObject $directory `
+                    -Category ([System.Management.Automation.ErrorCategory]::ObjectNotFound)
+                
+                $PSCmdlet.WriteError($errorRecord)
+                return
+            }
+        }
+        
+        # Fail if file already exists to prevent data loss in automation
+        if (Test-Path -Path $Path -PathType Leaf) {
+            $errorRecord = New-ErrorRecord `
+                -ErrorId 'FileAlreadyExists' `
+                -Message "File already exists: $Path. To prevent accidental data loss, this function will not overwrite existing files. Please remove the existing file or use a different filename." `
+                -TargetObject $Path `
+                -Category ([System.Management.Automation.ErrorCategory]::ResourceExists)
+            
+            $PSCmdlet.WriteError($errorRecord)
+            return
+        }
+        
+        # Track records processed
+        $recordCount = 0
+        
+        # FIXED: Create UTF8 encoder without BOM for cross-platform compatibility
+        $script:utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    }
+    
+    process {
+        foreach ($record in $InputObject) {
+            # Create a normalized object with consistent schema and explicit nulls
+            # This ensures every JSONL line has the same structure
+            $normalizedRecord = [ordered]@{
+                ip              = if ($null -ne $record.IP) { $record.IP } else { $null }
+                asn             = if ($null -ne $record.ASN) { $record.ASN } else { $null }
+                asn_name        = if ($null -ne $record.ASN_Name) { $record.ASN_Name } else { $null }
+                asn_domain      = if ($null -ne $record.ASN_Domain) { $record.ASN_Domain } else { $null }
+                country         = if ($null -ne $record.Country) { $record.Country } else { $null }
+                country_code    = if ($null -ne $record.Country_Code) { $record.Country_Code } else { $null }
+                continent       = if ($null -ne $record.Continent) { $record.Continent } else { $null }
+                continent_code  = if ($null -ne $record.Continent_Code) { $record.Continent_Code } else { $null }
+            }
+            
+            # Convert to compact JSON (single line, no whitespace)
+            # -Compress ensures each record is a single line
+            # -Depth 1 is sufficient for flat structure
+            try {
+                $jsonLine = $normalizedRecord | ConvertTo-Json -Compress -Depth 1
+                
+                # Write to file only if ShouldProcess confirms
+                if ($PSCmdlet.ShouldProcess($Path, "Write JSONL record")) {
+                    try {
+                        #  Use .NET methods to write UTF8 without BOM
+                        # This works consistently across PowerShell 5.1 and 7+
+                        $content = $jsonLine + "`n"
+                        [System.IO.File]::AppendAllText($Path, $content, $script:utf8NoBom)
+                        $recordCount++
+                    }
+                    catch {
+                        $errorRecord = New-ErrorRecord `
+                            -ErrorId 'FileWriteFailed' `
+                            -Message "Failed to write record to file '$Path': $($_.Exception.Message)" `
+                            -TargetObject $Path `
+                            -Category ([System.Management.Automation.ErrorCategory]::WriteError)
+                        
+                        $PSCmdlet.WriteError($errorRecord)
+                        continue
+                    }
+                }
+            }
+            catch {
+                $errorRecord = New-ErrorRecord `
+                    -ErrorId 'JsonConversionFailed' `
+                    -Message "Failed to convert record to JSON: $($_.Exception.Message)" `
+                    -TargetObject $record `
+                    -Category ([System.Management.Automation.ErrorCategory]::InvalidData)
+                
+                $PSCmdlet.WriteError($errorRecord)
+                continue
+            }
+        }
+    }
+    
+    end {
+        if ($recordCount -gt 0) {
+            Write-Verbose "Successfully exported $recordCount records to $Path"
+        }
+    }
+}
+
+
+
+## Working
+
 function Get-IPInfoLiteEntry {
     <#
     .SYNOPSIS
@@ -552,10 +751,11 @@ function Get-IPInfoLiteBatch {
             if (-not $ProcessedCacheIPs.Contains($trimmed)) {
                 $cached = $cache.Get($trimmed) | Select-Object * -ExcludeProperty CacheHit
                 $cached | Add-Member -NotePropertyName 'CacheHit' -NotePropertyValue $true
-                $results.Add($cached)
+                [void]$results.Add($cached) 
 
                 # Mark this IP as processed from cache
-                $ProcessedCacheIPs.Add($trimmed)
+                # Cast Void to avoid leakage into pipeline
+                [void]$ProcessedCacheIPs.Add($trimmed)
             }
 
             continue
@@ -1022,4 +1222,4 @@ $Script:BogonRanges = Initialize-BogonRanges
 $Script:flags = Initialize-CountryFlagTable
 
 
-Export-ModuleMember -Function Get-IPInfoLiteEntry, Get-IPInfoLiteBatch, Get-IPInfoLiteCache, Clear-IPInfoLiteCache
+Export-ModuleMember -Function Get-IPInfoLiteEntry, Get-IPInfoLiteBatch, Get-IPInfoLiteCache, Clear-IPInfoLiteCache, Export-IPInfoLiteLLM
