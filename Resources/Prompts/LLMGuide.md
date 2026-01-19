@@ -186,4 +186,4 @@ We welcome community contributions. To propose a new use case, please provide a 
 ---
 
 **Last Updated:** January 2026  
-**Module Version:** 3.0.0
+**Module Version:** 3.0.1
