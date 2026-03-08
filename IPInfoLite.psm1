@@ -421,7 +421,7 @@ function Export-IPInfoLiteLLM {
                     -TargetObject $directory `
                     -Category ([System.Management.Automation.ErrorCategory]::ObjectNotFound)
                 
-                $PSCmdlet.WriteError($errorRecord)
+                $PSCmdlet.ThrowTerminatingError($errorRecord)
                 return
             }
         }
@@ -434,7 +434,7 @@ function Export-IPInfoLiteLLM {
                 -TargetObject $Path `
                 -Category ([System.Management.Automation.ErrorCategory]::ResourceExists)
             
-            $PSCmdlet.WriteError($errorRecord)
+            $PSCmdlet.ThrowTerminatingError($errorRecord)
             return
         }
         
@@ -451,7 +451,7 @@ function Export-IPInfoLiteLLM {
             # This ensures every JSONL line has the same structure
             $normalizedRecord = [ordered]@{
                 ip              = if ($null -ne $record.IP) { $record.IP } else { $null }
-                asn             = if ($null -ne $record.ASN) { $record.ASN } else { $null }
+                asn             = if ($null -ne $record.ASN) { $record.ASN -replace '^AS', '' } else { $null }
                 asn_name        = if ($null -ne $record.ASN_Name) { $record.ASN_Name } else { $null }
                 asn_domain      = if ($null -ne $record.ASN_Domain) { $record.ASN_Domain } else { $null }
                 country         = if ($null -ne $record.Country) { $record.Country } else { $null }
@@ -550,10 +550,15 @@ function Get-IPInfoLiteEntry {
 
     # Don't attempt to cache or bogon-check self queries
     if ($ip -eq "") {
-        $url = "$($script:config.api.baseUrlMe)?token=$token"
+        $url = $script:config.api.baseUrlMe
+
+        $requestHeaders = @{
+            Accept        = "application/json"
+            Authorization = "Bearer $token"
+        }
 
         try {
-            $response = Invoke-RestMethod -Uri $url -Method Get -Headers $script:config.api.headers
+            $response = Invoke-RestMethod -Uri $url -Method Get -Headers $requestHeaders
 
             return [PSCustomObject]@{
                 IP                      = $response.ip
@@ -570,20 +575,17 @@ function Get-IPInfoLiteEntry {
             }
         } catch {
 
-            # Only sanitize if an error occurred
-            $sanitizedUrl = "$($script:config.api.baseUrlMe)" + "?token=<REDACTED>"
-
             $err = New-ErrorRecord  `
                 -ErrorId "ERR_API_FAILURE"  `
                 -Message "External API request failed due to a possible timeout, network error, invalid token, or unexpected response."  `
-                -TargetObject $sanitizedUrl `
+                -TargetObject $url `
                 -Category NotSpecified
             throw $err
         }
     }
 
     # Validate input IP
-    if (Test-BogonIP -ip $ip) {
+    if (Test-BogonIP -IPAddress $ip) {
         $err = New-ErrorRecord  `
             -ErrorId "INPUT_ERR_BOGON" `
             -Message "The IP address $ip is a bogon (reserved or non-routable). Only public IP addresses can be queried for geolocation." `
@@ -602,8 +604,14 @@ function Get-IPInfoLiteEntry {
         }
     
     try {
-        $url = "$($script:config.api.baseUrl)$ip" + "?token=$token"
-        $response = Invoke-RestMethod -Uri $url -Method Get -Headers $script:config.api.headers
+        $url = "$($script:config.api.baseUrl)$ip"
+
+        $requestHeaders = @{
+            Accept        = "application/json"
+            Authorization = "Bearer $token"
+        }
+
+        $response = Invoke-RestMethod -Uri $url -Method Get -Headers $requestHeaders
 
         $result = [PSCustomObject]@{
             IP                      = $response.ip
@@ -623,14 +631,11 @@ function Get-IPInfoLiteEntry {
         return $result
 
     } catch {
-        
-        # Only sanitize if an error occurred
-        $sanitizedUrl = "$($script:config.api.baseUrl)$ip" + "?token=<REDACTED>"
 
         $err = New-ErrorRecord  `
             -ErrorId "ERR_API_FAILURE"  `
             -Message "External API request failed due to a possible timeout, network error, invalid token, or unexpected response."  `
-            -TargetObject $sanitizedUrl `
+            -TargetObject "$($script:config.api.baseUrl)$ip" `
             -Category NotSpecified
         Write-Error -ErrorRecord $err
     }
@@ -734,7 +739,7 @@ function Get-IPInfoLiteBatch {
         }
 
         #Skip bogon IPs
-        if (Test-BogonIP -ip $trimmed) {
+        if (Test-BogonIP -IPAddress $trimmed) {
             $err = New-ErrorRecord  `
                 -ErrorId "INPUT_ERR_BOGON" `
                 -Message "The provided IP address $($trimmed) is classified as a bogon (non-routable or reserved) and is excluded from querying." `
@@ -773,8 +778,13 @@ function Get-IPInfoLiteBatch {
     # This section breaks the validated IP list into configurable chunks to comply with API limits,
     # builds a JSON payload for each chunk.
 
-    # Combine Base URL and provided token.
-    $url = "$($script:config.api.baseUrlBatch)" + "?token=$token"
+    # Combine Base URL and build auth headers
+    $url = $script:config.api.baseUrlBatch
+
+    $requestHeaders = @{
+        Accept        = "application/json"
+        Authorization = "Bearer $token"
+    }
 
     for ($i = 0; $i -lt $validIps.Count; $i += $script:config.processing.chunkSize) {
         $size  = [Math]::Min($script:config.processing.chunkSize, $validIps.Count - $i)
@@ -791,7 +801,7 @@ function Get-IPInfoLiteBatch {
         $response = Invoke-RestRequest  -Uri $url `
                                         -Method Post `
                                         -Body $body `
-                                        -Headers $script:config.api.headers
+                                        -Headers $requestHeaders
 
       
         if (-not $response.Success) {
@@ -947,10 +957,6 @@ $attempt = 0
 $statusCode = 0
 $lastErrorMessage = $null
 
-$attempt = 0
-$statusCode = $null
-$lastErrorMessage = $null
-
 while ($attempt -lt $MaxRetries) {
     $attempt++
     try {
@@ -1093,10 +1099,15 @@ function Test-IPInfoLiteToken {
         [string]$token
     )
 
-    $url = "$($script:config.api.baseUrlMe)?token=$token"
+    $url = $script:config.api.baseUrlMe
+
+    $requestHeaders = @{
+        Accept        = "application/json"
+        Authorization = "Bearer $token"
+    }
 
     try {
-        $null = Invoke-RestMethod -Uri $url -Headers $script:config.api.headers -Method Get -TimeoutSec 5
+        $null = Invoke-RestMethod -Uri $url -Headers $requestHeaders -Method Get -TimeoutSec 5
         return [PSCustomObject]@{
             Success = $true
             Message = "Token is valid."

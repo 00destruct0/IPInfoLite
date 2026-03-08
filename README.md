@@ -37,18 +37,34 @@ Install-Module -Name IPInfoLite -Scope CurrentUser -Force
 
 If you need assistance installing PowerShell 7 on Windows, refer to Microsoft’s official documentation [Microsoft Learn: Installing PowerShell on Windows](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5)
 
+## Supply Chain Security
 
-## What’s New in v3.0.1
+This project includes a Software Bill of Materials (SBOM) to support supply chain transparency and integrity verification. An SBOM is a structured inventory of all components, files, and metadata that make up a software package, enabling users to verify exactly what is included in the software they install.
 
-- **LLM-Optimized Export**  
-  `Export-IPInfoLiteLLM` exports IP geolocation data in JSONL format optimized for analysis with Large Language Models (Claude, ChatGPT, Gemini). This supports LLM driven threat detection, pattern recognition, and security analysis workflows. See the [LLM Analysis Guide](Resources/Prompts/README.md) for examples and prompt templates.
+The SBOM is published in [SPDX 2.3](https://spdx.dev/) format, an open standard recognized as ISO/IEC 5962:2021. SPDX is maintained by the Linux Foundation and is the SBOM format natively supported by GitHub. It is widely used across government, enterprise, and open source ecosystems for license compliance, vulnerability tracking, and supply chain risk management.
+
+The SBOM file (`IPInfoLite-3.1.0.spdx.json`) is located in the repository root and covers all files included in the distribution package published to the PowerShell Gallery. Each file entry includes a SHA256 checksum that can be used to verify the integrity of installed module files against the published SBOM.
+
+
+## What’s New in v3.1.0
+
+- **Security Improvement: Software Bill of Materials (SBOM)** 
+An SPDX 2.3 SBOM (`IPInfoLite-3.1.0.spdx.json`) is now included with the module, providing a complete inventory of distributed files with SHA256 checksums for integrity verification.
+
+- **Security Improvement: Secure Token Authentication** 
+API authentication has been migrated from URL query parameters to HTTP Bearer token headers. Tokens are no longer embedded in request URLs, preventing potential exposure through proxy logs, server access logs, or PowerShell verbose output. This change improves credential handling while requiring no action from users.
+
+- **ASN normalization for improved LLM analysis** 
+`Export-IPInfoLiteLLM` ASN values are now exported as numeric identifiers (`8075` instead of `AS8075`) to reduce token usage and improve consistency for analytical queries.
   
-- **Bug Fix: Removed Stray "True" Values from Output**  
- Fixed boolean return values from `HashSet.Add()` leaking into results by adding `[void]` cast to suppress output during cache processing in `Get-IPInfoLiteBatch`.
+- **Bug Fix: Duplicate variable initialization in Invoke-RestRequest** 
+`$attempt`, `$statusCode`, and `$lastErrorMessage` were inadvertently initialized twice in consecutive blocks. The second initialization reset `$statusCode` from `0` to `$null`, altering downstream behavior. The final return evaluates `$statusCode -ne 0` as its guard condition, which could be satisfied unexpectedly when `$statusCode` was `$null`. The duplicate initialization block has been removed to ensure a consistent variable state and correct evaluation of the return condition.
 
+ - **Bug Fix: Parameter name mismatch -ip vs -IPAddress in Test-BogonIP**
+The `Test-BogonIP` function declared its parameter as `-IPAddress`, but callers invoked it using `-ip`. Callers have been updated to use `-IPAddress` to match the function definition and ensure consistent parameter usage.
 
-
-
+ - **Bug Fix: Export-IPInfoLiteLLM - begin block return doesn't abort process**
+In the `begin` block, validation failures (nonexistent directory or pre-existing output file) called `$PSCmdlet.WriteError()` followed by `return`. In advanced functions, `return` inside a `begin` block only exits the `begin` block; the `process` block will still execute for each pipeline item. This allowed the function to continue attempting to write records even after validation failed. The code has been updated to use `$PSCmdlet.ThrowTerminatingError($errorRecord)` to ensure the function terminates immediately when validation fails.
 
 
 ## Usage
@@ -90,7 +106,7 @@ Example prompts to try:
 - "Are there observable patterns in the ASNs associated with these IPs?"
 - "Based on infrastructure (hosting vs residential ISPs), what does this suggest about the threat actor?"
 
-See the [LLM Analysis Guide](Resources/Prompts/LLMGuide.md) for detailed workflows and advanced examples.
+See the [LLM Analysis Guide](/00destruct0/IPInfoLite/blob/main/Resources/Prompts/LLMGuide.md) for detailed workflows and advanced examples.
 
 
 ### Why Use LLM Analysis?
