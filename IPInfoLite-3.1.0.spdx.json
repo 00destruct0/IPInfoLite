@@ -1,0 +1,187 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "IPInfoLite-3.1.0",
+  "documentNamespace": "https://github.com/00destruct0/IPInfoLite/spdxdocs/IPInfoLite-3.1.0",
+  "creationInfo": {
+    "created": "2026-03-08T07:00:54Z",
+    "creators": [
+      "Person: Ryan Terp (ryan.terp@gmail.com)",
+      "Tool: manual-sbom-generation"
+    ],
+    "licenseListVersion": "3.25",
+    "comment": "Distribution SBOM for IPInfoLite PowerShell module v3.1.0. This SBOM covers the files included in the installable module package distributed via the PowerShell Gallery. Test files and development-only assets are excluded. Full source is available at https://github.com/00destruct0/IPInfoLite"
+  },
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-IPInfoLite",
+      "name": "IPInfoLite",
+      "versionInfo": "3.1.0",
+      "supplier": "Person: Ryan Terp (ryan.terp@gmail.com)",
+      "originator": "Person: Ryan Terp (ryan.terp@gmail.com)",
+      "downloadLocation": "https://www.powershellgallery.com/packages/IPInfoLite/3.1.0",
+      "homepage": "https://github.com/00destruct0/IPInfoLite",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) Ryan Terp",
+      "description": "PowerShell module for querying IP geolocation and ASN information using the IPinfo Lite API. Provides single and batch IP lookups, in-memory caching, bogon filtering, and JSONL export optimized for LLM analysis.",
+      "primaryPackagePurpose": "APPLICATION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:powershellgallery/IPInfoLite@3.1.0"
+        },
+        {
+          "referenceCategory": "OTHER",
+          "referenceType": "url",
+          "referenceLocator": "https://github.com/00destruct0/IPInfoLite"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "SPDXID": "SPDXRef-File-IPInfoLite-psm1",
+      "fileName": "IPInfoLite.psm1",
+      "fileTypes": ["SOURCE"],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "ecd1d05674d4e805d9fd58db648025e11ff8b0db1eefdb1e96f6981ccb5c74eb"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "copyrightText": "Copyright (c) Ryan Terp",
+      "comment": "Primary module file containing all exported and private functions including Get-IPInfoLiteEntry, Get-IPInfoLiteBatch, Get-IPInfoLiteCache, Clear-IPInfoLiteCache, and Export-IPInfoLiteLLM."
+    },
+    {
+      "SPDXID": "SPDXRef-File-IPInfoLite-psd1",
+      "fileName": "IPInfoLite.psd1",
+      "fileTypes": ["SOURCE"],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "9717d465ae472555f4f3c0b045d00aa5d0cd92cc18a9b436baf7ef976d1cb077"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "copyrightText": "Copyright (c) Ryan Terp",
+      "comment": "PowerShell module manifest defining module metadata, version, exported functions, and dependencies."
+    },
+    {
+      "SPDXID": "SPDXRef-File-bogonRanges-json",
+      "fileName": "Resources/bogonRanges.json",
+      "fileTypes": ["APPLICATION"],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "326c905603cd6f95864247c99c7bb02eadde4928b3ac78c53b332700f5e3c151"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "copyrightText": "Copyright (c) Ryan Terp",
+      "comment": "Static data file containing CIDR ranges for bogon (reserved and non-routable) IP addresses used for input validation."
+    },
+    {
+      "SPDXID": "SPDXRef-File-countries-flags-json",
+      "fileName": "Resources/countries_flags.json",
+      "fileTypes": ["APPLICATION"],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "66805c67a1fefae2473432891c4bffc910db84dbab710aba206483532b59d4d4"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "copyrightText": "Copyright (c) Ryan Terp",
+      "comment": "Static data file containing country code to flag emoji and Unicode mappings."
+    },
+    {
+      "SPDXID": "SPDXRef-File-LLMGuide-md",
+      "fileName": "Resources/Prompts/LLMGuide.md",
+      "fileTypes": ["DOCUMENTATION"],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "bc629a317610209c088ff82ec1a5aedb49fc0efdb9d3df730282a03305c8453b"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "copyrightText": "Copyright (c) Ryan Terp",
+      "comment": "Prompt templates, example workflows, and best practices for analyzing IPInfoLite JSONL output with LLMs."
+    },
+    {
+      "SPDXID": "SPDXRef-File-LICENSE",
+      "fileName": "LICENSE",
+      "fileTypes": ["TEXT"],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "6af8c4e86159af721192913cb5789996570ae5e6871a9e1ab790cdb424439163"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "copyrightText": "Copyright (c) Ryan Terp",
+      "comment": "MIT license file for the IPInfoLite module."
+    },
+    {
+      "SPDXID": "SPDXRef-File-README-md",
+      "fileName": "README.md",
+      "fileTypes": ["DOCUMENTATION"],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "928dceebdee1fadcea562a4e39c1b939d78fcf4a955571c39ccdf7a4a9e1503d"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "copyrightText": "Copyright (c) Ryan Terp",
+      "comment": "Module documentation including installation instructions, usage examples, and changelog."
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-IPInfoLite"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-IPInfoLite",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-IPInfoLite-psm1"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-IPInfoLite",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-IPInfoLite-psd1"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-IPInfoLite",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-bogonRanges-json"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-IPInfoLite",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-countries-flags-json"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-IPInfoLite",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-LLMGuide-md"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-IPInfoLite",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-LICENSE"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-IPInfoLite",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-README-md"
+    }
+  ]
+}
