@@ -1,82 +1,404 @@
-[
-  {
-    "Network": "0.0.0.0",
-    "PrefixLength": 8
+{
+  "metadata": {
+    "version": "2.0",
+    "lastUpdated": "2026-04-25",
+    "source": "IPinfo Bogon Reference (https://ipinfo.io/bogon) and IANA Special-Purpose Address Registries",
+    "ianaIPv4Registry": "https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml",
+    "ianaIPv6Registry": "https://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry.xhtml",
+    "description": "Bogon and reserved IP ranges for IPv4 and IPv6. Aligned with IPinfo API bogon definitions to ensure consistent filtering behaviour. Includes IPv4 reserved ranges, IPv6 reserved ranges, and IPv6 representations of IPv4 bogon ranges via 6to4 and Teredo tunneling mechanisms."
   },
-  {
-    "Network": "10.0.0.0",
-    "PrefixLength": 8
-  },
-  {
-    "Network": "100.64.0.0",
-    "PrefixLength": 10
-  },
-  {
-    "Network": "127.0.0.0",
-    "PrefixLength": 8
-  },
-  {
-    "Network": "169.254.0.0",
-    "PrefixLength": 16
-  },
-  {
-    "Network": "172.16.0.0",
-    "PrefixLength": 12
-  },
-  {
-    "Network": "192.0.2.0",
-    "PrefixLength": 24
-  },
-  {
-    "Network": "192.168.0.0",
-    "PrefixLength": 16
-  },
-  {
-    "Network": "198.18.0.0",
-    "PrefixLength": 15
-  },
-  {
-    "Network": "198.51.100.0",
-    "PrefixLength": 24
-  },
-  {
-    "Network": "203.0.113.0",
-    "PrefixLength": 24
-  },
-  {
-    "Network": "224.0.0.0",
-    "PrefixLength": 4
-  },
-  {
-    "Network": "240.0.0.0",
-    "PrefixLength": 4
-  },
-  {
-    "Network": "255.255.255.255",
-    "PrefixLength": 32
-  },
-  {
-    "Network": "::1",
-    "PrefixLength": 128
-  },
-  {
-    "Network": "fc00::",
-    "PrefixLength": 7
-  },
-  {
-    "Network": "fe80::",
-    "PrefixLength": 10
-  },
-  {
-    "Network": "ff00::",
-    "PrefixLength": 8
-  },
-  {
-    "Network": "::",
-    "PrefixLength": 128
-  },
-  {
-    "Network": "2001:db8::",
-    "PrefixLength": 32
-  }
-]
+  "ranges": [
+    {
+      "Network": "0.0.0.0",
+      "PrefixLength": 8,
+      "AddressFamily": "IPv4",
+      "Description": "This network",
+      "RFC": "RFC1122"
+    },
+    {
+      "Network": "10.0.0.0",
+      "PrefixLength": 8,
+      "AddressFamily": "IPv4",
+      "Description": "Private-use networks",
+      "RFC": "RFC1918"
+    },
+    {
+      "Network": "100.64.0.0",
+      "PrefixLength": 10,
+      "AddressFamily": "IPv4",
+      "Description": "Carrier-grade NAT",
+      "RFC": "RFC6598"
+    },
+    {
+      "Network": "127.0.0.0",
+      "PrefixLength": 8,
+      "AddressFamily": "IPv4",
+      "Description": "Loopback",
+      "RFC": "RFC1122"
+    },
+    {
+      "Network": "127.0.53.53",
+      "PrefixLength": 32,
+      "AddressFamily": "IPv4",
+      "Description": "Name collision occurrence",
+      "RFC": "ICANN-NCA"
+    },
+    {
+      "Network": "169.254.0.0",
+      "PrefixLength": 16,
+      "AddressFamily": "IPv4",
+      "Description": "Link local",
+      "RFC": "RFC3927"
+    },
+    {
+      "Network": "172.16.0.0",
+      "PrefixLength": 12,
+      "AddressFamily": "IPv4",
+      "Description": "Private-use networks",
+      "RFC": "RFC1918"
+    },
+    {
+      "Network": "192.0.0.0",
+      "PrefixLength": 24,
+      "AddressFamily": "IPv4",
+      "Description": "IETF protocol assignments",
+      "RFC": "RFC6890"
+    },
+    {
+      "Network": "192.0.2.0",
+      "PrefixLength": 24,
+      "AddressFamily": "IPv4",
+      "Description": "TEST-NET-1",
+      "RFC": "RFC5737"
+    },
+    {
+      "Network": "192.168.0.0",
+      "PrefixLength": 16,
+      "AddressFamily": "IPv4",
+      "Description": "Private-use networks",
+      "RFC": "RFC1918"
+    },
+    {
+      "Network": "198.18.0.0",
+      "PrefixLength": 15,
+      "AddressFamily": "IPv4",
+      "Description": "Network interconnect device benchmark testing",
+      "RFC": "RFC2544"
+    },
+    {
+      "Network": "198.51.100.0",
+      "PrefixLength": 24,
+      "AddressFamily": "IPv4",
+      "Description": "TEST-NET-2",
+      "RFC": "RFC5737"
+    },
+    {
+      "Network": "203.0.113.0",
+      "PrefixLength": 24,
+      "AddressFamily": "IPv4",
+      "Description": "TEST-NET-3",
+      "RFC": "RFC5737"
+    },
+    {
+      "Network": "224.0.0.0",
+      "PrefixLength": 4,
+      "AddressFamily": "IPv4",
+      "Description": "Multicast",
+      "RFC": "RFC1112"
+    },
+    {
+      "Network": "240.0.0.0",
+      "PrefixLength": 4,
+      "AddressFamily": "IPv4",
+      "Description": "Reserved for future use",
+      "RFC": "RFC1112"
+    },
+    {
+      "Network": "255.255.255.255",
+      "PrefixLength": 32,
+      "AddressFamily": "IPv4",
+      "Description": "Limited broadcast",
+      "RFC": "RFC8190"
+    },
+    {
+      "Network": "::",
+      "PrefixLength": 128,
+      "AddressFamily": "IPv6",
+      "Description": "Node-scope unicast unspecified address",
+      "RFC": "RFC4291"
+    },
+    {
+      "Network": "::1",
+      "PrefixLength": 128,
+      "AddressFamily": "IPv6",
+      "Description": "Node-scope unicast loopback address",
+      "RFC": "RFC4291"
+    },
+    {
+      "Network": "::ffff:0:0",
+      "PrefixLength": 96,
+      "AddressFamily": "IPv6",
+      "Description": "IPv4-mapped addresses",
+      "RFC": "RFC4291"
+    },
+    {
+      "Network": "::",
+      "PrefixLength": 96,
+      "AddressFamily": "IPv6",
+      "Description": "IPv4-compatible addresses",
+      "RFC": "RFC4291"
+    },
+    {
+      "Network": "100::",
+      "PrefixLength": 64,
+      "AddressFamily": "IPv6",
+      "Description": "Remotely triggered black hole addresses",
+      "RFC": "RFC6666"
+    },
+    {
+      "Network": "2001:10::",
+      "PrefixLength": 28,
+      "AddressFamily": "IPv6",
+      "Description": "Overlay routable cryptographic hash identifiers (ORCHID)",
+      "RFC": "RFC4843"
+    },
+    {
+      "Network": "2001:db8::",
+      "PrefixLength": 32,
+      "AddressFamily": "IPv6",
+      "Description": "Documentation prefix",
+      "RFC": "RFC3849"
+    },
+    {
+      "Network": "3fff::",
+      "PrefixLength": 20,
+      "AddressFamily": "IPv6",
+      "Description": "Documentation prefix",
+      "RFC": "RFC9637"
+    },
+    {
+      "Network": "fc00::",
+      "PrefixLength": 7,
+      "AddressFamily": "IPv6",
+      "Description": "Unique local addresses (ULA)",
+      "RFC": "RFC4193"
+    },
+    {
+      "Network": "fe80::",
+      "PrefixLength": 10,
+      "AddressFamily": "IPv6",
+      "Description": "Link-local unicast",
+      "RFC": "RFC4291"
+    },
+    {
+      "Network": "fec0::",
+      "PrefixLength": 10,
+      "AddressFamily": "IPv6",
+      "Description": "Site-local unicast (deprecated)",
+      "RFC": "RFC3879"
+    },
+    {
+      "Network": "ff00::",
+      "PrefixLength": 8,
+      "AddressFamily": "IPv6",
+      "Description": "Multicast (note: ff0e::/16 is global scope and may appear on the global internet)",
+      "RFC": "RFC4291"
+    },
+    {
+      "Network": "2002::",
+      "PrefixLength": 24,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (0.0.0.0/8)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:a00::",
+      "PrefixLength": 24,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (10.0.0.0/8)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:7f00::",
+      "PrefixLength": 24,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (127.0.0.0/8)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:a9fe::",
+      "PrefixLength": 32,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (169.254.0.0/16)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:ac10::",
+      "PrefixLength": 28,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (172.16.0.0/12)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:c000::",
+      "PrefixLength": 40,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (192.0.0.0/24)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:c000:200::",
+      "PrefixLength": 40,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (192.0.2.0/24)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:c0a8::",
+      "PrefixLength": 32,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (192.168.0.0/16)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:c612::",
+      "PrefixLength": 31,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (198.18.0.0/15)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:c633:6400::",
+      "PrefixLength": 40,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (198.51.100.0/24)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:cb00:7100::",
+      "PrefixLength": 40,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (203.0.113.0/24)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:e000::",
+      "PrefixLength": 20,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (224.0.0.0/4)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:f000::",
+      "PrefixLength": 20,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (240.0.0.0/4)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2002:ffff:ffff::",
+      "PrefixLength": 48,
+      "AddressFamily": "IPv6",
+      "Description": "6to4 bogon (255.255.255.255/32)",
+      "RFC": "RFC3056"
+    },
+    {
+      "Network": "2001::",
+      "PrefixLength": 40,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (0.0.0.0/8)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:a00::",
+      "PrefixLength": 40,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (10.0.0.0/8)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:7f00::",
+      "PrefixLength": 40,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (127.0.0.0/8)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:a9fe::",
+      "PrefixLength": 48,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (169.254.0.0/16)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:ac10::",
+      "PrefixLength": 44,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (172.16.0.0/12)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:c000::",
+      "PrefixLength": 56,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (192.0.0.0/24)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:c000:200::",
+      "PrefixLength": 56,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (192.0.2.0/24)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:c0a8::",
+      "PrefixLength": 48,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (192.168.0.0/16)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:c612::",
+      "PrefixLength": 47,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (198.18.0.0/15)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:c633:6400::",
+      "PrefixLength": 56,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (198.51.100.0/24)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:cb00:7100::",
+      "PrefixLength": 56,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (203.0.113.0/24)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:e000::",
+      "PrefixLength": 36,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (224.0.0.0/4)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:f000::",
+      "PrefixLength": 36,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (240.0.0.0/4)",
+      "RFC": "RFC4380"
+    },
+    {
+      "Network": "2001:0:ffff:ffff::",
+      "PrefixLength": 64,
+      "AddressFamily": "IPv6",
+      "Description": "Teredo bogon (255.255.255.255/32)",
+      "RFC": "RFC4380"
+    }
+  ]
+}
