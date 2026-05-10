@@ -46,25 +46,44 @@ The SBOM is published in [SPDX 2.3](https://spdx.dev/) format, an open standard 
 The SBOM file (`IPInfoLite-3.1.0.spdx.json`) is located in the repository root and covers all files included in the distribution package published to the PowerShell Gallery. Each file entry includes a SHA256 checksum that can be used to verify the integrity of installed module files against the published SBOM.
 
 
-## What’s New in v3.1.0
+## What’s New in v3.2.0
 
-- **Security Improvement: Software Bill of Materials (SBOM)** 
-An SPDX 2.3 SBOM (`IPInfoLite-3.1.0.spdx.json`) is now included with the module, providing a complete inventory of distributed files with SHA256 checksums for integrity verification.
+### Added
+- Added a progress bar to `Get-IPInfoLiteBatch` using `Write-Progress`, showing chunk progress, IP totals, and completion percentage. The display is automatically disabled in non-interactive sessions and is safe for pipeline operations.
 
-- **Security Improvement: Secure Token Authentication** 
-API authentication has been migrated from URL query parameters to HTTP Bearer token headers. Tokens are no longer embedded in request URLs, preventing potential exposure through proxy logs, server access logs, or PowerShell verbose output. This change improves credential handling while requiring no action from users.
+### Changed
+- `Get-IPInfoLiteEntry` Both the `/me` endpoint and standard IP lookup paths now route through `Invoke-RestRequest` rather than calling `Invoke-RestMethod` directly, bringing them in line with `Get-IPInfoLiteBatch` with full retry logic, exponential backoff with jitter, `Retry-After` handling, and timeout protection via `apiTimeoutSec`.
 
-- **ASN normalization for improved LLM analysis** 
-`Export-IPInfoLiteLLM` ASN values are now exported as numeric identifiers (`8075` instead of `AS8075`) to reduce token usage and improve consistency for analytical queries.
-  
-- **Bug Fix: Duplicate variable initialization in Invoke-RestRequest** 
-`$attempt`, `$statusCode`, and `$lastErrorMessage` were inadvertently initialized twice in consecutive blocks. The second initialization reset `$statusCode` from `0` to `$null`, altering downstream behavior. The final return evaluates `$statusCode -ne 0` as its guard condition, which could be satisfied unexpectedly when `$statusCode` was `$null`. The duplicate initialization block has been removed to ensure a consistent variable state and correct evaluation of the return condition.
+- `Invoke-RestRequest` Broadened the success response check from a strict `-eq 200` comparison to the HTTP-compliant `-ge 200 -and -lt 300` range check, and updated the returned object to reflect the actual status code rather than a hardcoded `200`. The IPinfo Lite API currently returns `200` for all successful responses so there is no behavioural change, but this ensures correctness as the API evolves.
 
- - **Bug Fix: Parameter name mismatch -ip vs -IPAddress in Test-BogonIP**
-The `Test-BogonIP` function declared its parameter as `-IPAddress`, but callers invoked it using `-ip`. Callers have been updated to use `-IPAddress` to match the function definition and ensure consistent parameter usage.
+- `Bogon Detection` Expanded the bogon range file from 20 to 56 ranges, aligned with
+  [IPinfo's bogon definitions](https://ipinfo.io/bogon) for consistent filtering behaviour. IPv4 coverage grew from 14 to 16 ranges, adding `127.0.53.53/32` (name collision) and `192.0.0.0/24` (IETF assignments). IPv6 coverage grew from 6 to 40 ranges, adding 7 core reserved ranges plus 6to4 and Teredo tunnel representations of all IPv4 bogon ranges. The file was also restructured with a metadata section (version, date, and source references) and each range now includes `AddressFamily`, `Description`, and `RFC` fields, making it self-documenting.
 
- - **Bug Fix: Export-IPInfoLiteLLM - begin block return doesn't abort process**
-In the `begin` block, validation failures (nonexistent directory or pre-existing output file) called `$PSCmdlet.WriteError()` followed by `return`. In advanced functions, `return` inside a `begin` block only exits the `begin` block; the `process` block will still execute for each pipeline item. This allowed the function to continue attempting to write records even after validation failed. The code has been updated to use `$PSCmdlet.ThrowTerminatingError($errorRecord)` to ensure the function terminates immediately when validation fails.
+- `Test-BogonIP` Refactored to accept a pre-parsed `[System.Net.IPAddress]` object rather than a string, giving it a single responsibility of bogon determination. The internal `TryParse` call and invalid-format `Write-Warning` were removed, with format validation moved to each calling function. `Get-IPInfoLiteEntry` gained explicit `TryParse` validation that throws a structured terminating error on invalid format or bogon input. `Get-IPInfoLiteBatch` was updated to pass its already-parsed `$ipObj` directly, eliminating a redundant `TryParse` call per IP across every batch run. Error handling in both functions follows the module pattern: terminating for single entry, non-terminating for batch.
+
+- `Test-IPInCIDR` Added `[CmdletBinding()]` for consistency with `Test-BogonIP` and to enable `-Verbose` and `-Debug` support, `[Parameter(Mandatory)]` on all three parameters to make the function contract explicit, and `[ValidateRange(0, 128)]` on `$PrefixLength` to reject out-of-bounds values before they reach the bitwise calculation. Explanatory comments were added to the byte length mismatch check and bitwise mask calculation for maintainability.
+
+- `Initialize-BogonRanges` / `Test-BogonIP` Updated `Initialize-BogonRanges` to read the new bogon file structure and split ranges into `$Script:BogonRangesIPv4` and `$Script:BogonRangesIPv6` at load time using the `AddressFamily` field, eliminating runtime address family determination. `Test-BogonIP` now selects the appropriate pre-split list based on the input IP's address family, eliminating iteration over non-matching ranges. The plain string `throw` in `Initialize-BogonRanges` was replaced with a typed `ErrorRecord`, consistent with the module error handling pattern.
+
+- `Initialize-CountryFlagTable` Replaced the plain string `throw` with a typed `New-ErrorRecord` using `ERR_FLAGS_FILE_NOT_FOUND` and `ResourceUnavailable` category. Added a guard after `ConvertFrom-Json` for the case where the file exists but is empty or unparseable, producing a clear `ERR_FLAGS_FILE_EMPTY` error with `InvalidData` category rather than failing silently or surfacing a confusing runtime error downstream.
+
+- `Cache Storage` Changed the backing store from `[Hashtable]` to
+  `[System.Collections.Generic.Dictionary[string,object]]`, bringing three improvements: strong typing on string keys consistent with the generic collections used elsewhere in the module; improved string key lookup performance; and native `TryGetValue` support, eliminating the double lookup pattern in `Get()` where `ContainsKey` was followed by a redundant index access. The class comment claimed `TryGetValue` was already in use. This change makes that accurate.
+
+- `Cache` `Get-IPInfoLiteBatch` and `Get-IPInfoLiteEntry` were updated to use the single `Get()` and `$null` check pattern, replacing the previous `ContainsKey` + `Get()` double lookup. Cache hit object handling was also improved, replacing the `Select-Object *` full object rebuild and reflection-based `Add-Member` call with `PSObject.Copy()` and direct property assignment.
+
+### Fixed
+- `Invoke-RestRequest` Fixed `Retry-After` header extraction, which was unconditionally using the PS 5.1 string indexer pattern against `$resp.Headers`. On PS 7+ this silently returned `$null` because `HttpResponseHeaders` does not support string indexer access, causing the server's requested delay to be ignored and exponential backoff to proceed with a misleading "no Retry-After" warning. Extraction is now handled per version branch: `TryGetValues` on `HttpResponseHeaders` for PS 7+ and the string indexer on `WebHeaderCollection` for PS 5.1 and plain `WebException` paths ensuring the server-requested delay is correctly honoured on both PS versions.
+
+- `Invoke-RestRequest` `$resp`, `$statusCode`, and `$retryAfter` are now explicitly reset at the top of each retry iteration to prevent stale values leaking between attempts. Previously, a response object from one iteration could be consumed by the `switch` statement on the next, a stale `$retryAfter` could carry over to a subsequent 429 where no header was present, and `$statusCode` had a type inconsistency between its pre-loop initialisation (`0`) and its in-catch reset (`$null`). All three are now reset to consistent typed values at the start of each iteration.
+
+- `Invoke-RestRequest` Added `apiTimeoutSec` to `$script:config.apiRetry` (default: `30`) and applied it to `Invoke-WebRequest` via `-TimeoutSec`, using the parameter alias that works correctly across PS 5.1 and PS 7.4+. Previously, `Invoke-WebRequest` had no timeout, so a hung connection could block indefinitely regardless of retry configuration, rendering the retry logic ineffective.
+
+- `Invoke-RestRequest` Fixed a backoff delay bug where `[math]::Pow()` and `[math]::Min()` return `Double`, causing three related issues: fractional seconds were passed to `Start-Sleep` despite the backoff being designed for whole-second intervals; when `$maxDelay` reached `$HardMaxBackoff` the `+1` added for `Get-Random` could push the value one second over the hard cap; and `Start-Sleep` handles fractional values inconsistently across PS versions; PS 5.1 silently truncates while PS 7+ honours them, producing different sleep durations for the same calculation. An `[int]` cast after `[math]::Min()` resolves all three simultaneously. Applied to all three backoff paths: network failure, 429 with no `Retry-After`, and 502/503/504.
+
+- `QueryCache` Refactored `$Records` and `$KeyOrder` from static to instance members. Previously all instances silently shared the same storage, making multi-instance behaviour unpredictable and causing `Clear()` to wipe shared data while only resetting stats on the calling instance. Each instance now owns its data and stats exclusively, making `Clear()` fully self-contained. The static reference `[QueryCache]::Records.Count` in `Get-IPInfoLiteCache` was updated to `$script:QueryCache.Count` to reflect the change.
+
+- `Get-IPInfoLiteBatch` Fixed a logic ordering issue where `ProcessedCacheIPs` was checked after the cache lookup rather than before it, causing duplicate IPs to generate unnecessary cache operations and inflate hit and miss counters. The `HashSet` check now occurs first, a cheaper operation, before the cache is touched. `ProcessedCacheIPs.Add()` was also extended to cover both cache hit and cache miss paths, ensuring every first-occurrence valid IP is tracked and all subsequent duplicates are suppressed before reaching the cache or incrementing any counter. Stats from `Get-IPInfoLiteCache` now accurately reflect unique IP lookups only.
 
 
 ## Usage
@@ -104,10 +123,6 @@ $ipData | Export-IPInfoLiteLLM -Path "threat_analysis.jsonl"
 Example prompts to try:
 - "Which countries account for the highest volume of observed activity?"
 - "Are there observable patterns in the ASNs associated with these IPs?"
-- "Based on infrastructure (hosting vs residential ISPs), what does this suggest about the threat actor?"
-
-See the [LLM Analysis Guide](/00destruct0/IPInfoLite/blob/main/Resources/Prompts/LLMGuide.md) for detailed workflows and advanced examples.
-
 
 ### Why Use LLM Analysis?
 
@@ -120,23 +135,6 @@ Traditional analysis typically requires writing a new query or script for each q
 - No coding required for ad-hoc analysis  
 - Contextual anomaly identification and correlation analysis  
 
-
-### Use Cases
-
-**Security Operations:**
-- Identify coordinated attacks originating from multiple countries
-- Identify potential botnet infrastructure patterns
-- Highlight unusual or rare network infrastructure
-
-**Threat Intelligence:**
-- Generate executive summaries of attack origins
-- Compare changes in attacker infrastructure within a dataset or across multiple datasets
-- Assist in identifying emerging threat patterns
-
-**Compliance & Reporting:**
-- Support automated geolocation compliance analysis
-- Generate incident response documentation
-- Generate audit-ready documentation and summaries
 
 ### Supported LLM Platforms
 

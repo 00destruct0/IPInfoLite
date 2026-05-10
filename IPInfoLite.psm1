@@ -16,6 +16,7 @@ $script:config = @{
         hardMaxBackoff = 45   # max seconds to wait between retries
         baseDelay      = 2    # initial delay factor
         maxRetries     = 5    # maximum retry attempts
+        apiTimeoutSec  = 30   # seconds before an unresponsive API call is abandoned
     }
 }
 
@@ -49,21 +50,15 @@ function New-ErrorRecord {
 
 
 
-# The QueryCache class implements a lightweight, in-memory cache for IP query results using a static
-# hashtable for storage and a queue to track insertion order for eviction when a configurable limit
-# is reached. Keys are normalized to lowercase to ensure consistency, and the class tracks cache
-# statistics including hits, misses, and evictions for monitoring. It provides Add, Get, ContainsKey,
-# Clear, and GetStats methods, with Get optimized to use a single TryGetValue lookup and throwing a
-# typed CacheResolverException on misses for strong error handling. This design provides efficient
-# O(1) average-time operations and helps reduce redundant external API calls while keeping memory
-# usage predictable in large-scale processing.
+# The QueryCache class implements a lightweight, in-memory cache for IP query results using a
+# Generic Dictionary for O(1) TryGetValue lookups and a Queue to track insertion order for FIFO
+# eviction when a configurable limit is reached. Keys are normalized to lowercase to ensure
+# consistency across IPv6 address variants.
 
-class CacheResolverException : Exception {
-    CacheResolverException ([string]$Message, [Exception]$InnerException) : base ($Message, $InnerException) { }
-}
 class QueryCache {
-    hidden static [Hashtable]$Records = @{}
-    hidden static [System.Collections.Queue]$KeyOrder = [System.Collections.Queue]::new()  # Tracks insertion order for eviction
+    hidden [System.Collections.Generic.Dictionary[string,object]]$Records = 
+                [System.Collections.Generic.Dictionary[string,object]]::new()
+    hidden [System.Collections.Queue]$KeyOrder = [System.Collections.Queue]::new()
 
     hidden [UInt64] $Hit = 0
     hidden [UInt64] $Miss = 0
@@ -82,28 +77,34 @@ class QueryCache {
     }
 
     hidden [void] Init() {
-        $this | Add-Member -MemberType ScriptProperty -Name 'Count' -Value { return [QueryCache]::Records.Count }
+        $this | Add-Member -MemberType ScriptProperty -Name 'Count' -Value { return $this.Records.Count }
     }
 
     [void] Add ([string]$Key, $Value) {
         if ([string]::IsNullOrEmpty($Key)) {
-            throw "Cache key cannot be null or empty."
+            $err = [System.Management.Automation.ErrorRecord]::new(
+                [System.ArgumentException]::new("Cache key cannot be null or empty."),
+                "ERR_CACHE_INVALID_KEY",
+                [System.Management.Automation.ErrorCategory]::InvalidArgument,
+                $Key
+            )
+            throw $err
         }
 
         $_key = $Key.ToLower()
 
         # Only run eviction + queue tracking for brand-new keys
-        if (-not [QueryCache]::Records.ContainsKey($_key)) {
-            if ($this.Limit -gt 0 -and [QueryCache]::Records.Count -ge $this.Limit) {
-                $evictKey = [QueryCache]::KeyOrder.Dequeue()
-                [QueryCache]::Records.Remove($evictKey)
+        if (-not $this.Records.ContainsKey($_key)) {
+            if ($this.Limit -gt 0 -and $this.Records.Count -ge $this.Limit) {
+                $evictKey = $this.KeyOrder.Dequeue()
+                $this.Records.Remove($evictKey)
                 $this.Evicted++
             }
-            [QueryCache]::KeyOrder.Enqueue($_key)
+            $this.KeyOrder.Enqueue($_key)
         }
 
         # Add or update the record
-        [QueryCache]::Records[$_key] = $Value
+        $this.Records[$_key] = $Value
     }
 
     [bool] ContainsKey ([string]$Key) {
@@ -112,7 +113,7 @@ class QueryCache {
         }
 
         $_key = $Key.ToLower()
-        return [QueryCache]::Records.ContainsKey($_key)
+        return $this.Records.ContainsKey($_key)
     }
 
     [object] Get ([string]$Key) {
@@ -122,9 +123,10 @@ class QueryCache {
 
         $_key = $Key.ToLower()
 
-        if ([QueryCache]::Records.ContainsKey($_key)) {
+        $entry = $null
+        if ($this.Records.TryGetValue($_key, [ref]$entry)) {
             $this.Hit++
-            return [QueryCache]::Records[$_key]
+            return $entry
         }
 
         $this.Miss++
@@ -133,7 +135,7 @@ class QueryCache {
 
     [object] GetStats () {
         return [PSCustomObject]@{
-            Count   = [QueryCache]::Records.Count
+            Count   = $this.Records.Count
             Hit     = $this.Hit
             Miss    = $this.Miss
             Evicted = $this.Evicted
@@ -141,8 +143,8 @@ class QueryCache {
     }
 
     [void] Clear() {
-        [QueryCache]::Records.Clear()
-        [QueryCache]::KeyOrder.Clear()
+        $this.Records.Clear()
+        $this.KeyOrder.Clear()
         $this.Hit = 0
         $this.Miss = 0
         $this.Evicted = 0
@@ -208,7 +210,7 @@ function Get-IPInfoLiteCache {
         } else { 0 }
 
         return [PSCustomObject]@{
-            Count      = [QueryCache]::Records.Count
+            Count      = $script:QueryCache.Count
             Hit        = $script:QueryCache.Hit
             Miss       = $script:QueryCache.Miss
             Evicted    = $script:QueryCache.Evicted
@@ -411,8 +413,6 @@ function Export-IPInfoLiteLLM {
         # Validate that the directory exists
         $directory = Split-Path -Path $Path -Parent
         
-        # FIXED: Check if directory path is not empty/whitespace before validating
-        # This handles cases like "analysis.jsonl" where Split-Path returns ""
         if (-not [string]::IsNullOrWhiteSpace($directory)) {
             if (-not (Test-Path -Path $directory -PathType Container)) {
                 $errorRecord = New-ErrorRecord `
@@ -441,7 +441,7 @@ function Export-IPInfoLiteLLM {
         # Track records processed
         $recordCount = 0
         
-        # FIXED: Create UTF8 encoder without BOM for cross-platform compatibility
+        # UTF8 encoder without BOM for cross-platform compatibility
         $script:utf8NoBom = New-Object System.Text.UTF8Encoding $false
     }
     
@@ -557,38 +557,50 @@ function Get-IPInfoLiteEntry {
             Authorization = "Bearer $token"
         }
 
-        try {
-            $response = Invoke-RestMethod -Uri $url -Method Get -Headers $requestHeaders
+        $apiResponse = Invoke-RestRequest -Uri $url -Method GET -Headers $requestHeaders
 
-            return [PSCustomObject]@{
-                IP                      = $response.ip
-                ASN                     = $response.asn
-                ASN_Name                = $response.as_name
-                ASN_Domain              = $response.as_domain
-                Country                 = $response.country
-                Country_Code            = $response.country_code
-                Country_Flag_Emoji      = $flags[$response.country_code].Emoji
-                Country_Flag_Unicode    = $flags[$response.country_code].unicode
-                Continent               = $response.continent
-                Continent_Code          = $response.continent_code
-                CacheHit                = $false
-            }
-        } catch {
-
-            $err = New-ErrorRecord  `
-                -ErrorId "ERR_API_FAILURE"  `
-                -Message "External API request failed due to a possible timeout, network error, invalid token, or unexpected response."  `
+        if (-not $apiResponse.Success) {
+            $err = New-ErrorRecord `
+                -ErrorId "ERR_API_FAILURE" `
+                -Message "External API request failed for self query. Status code: $($apiResponse.StatusCode)." `
                 -TargetObject $url `
                 -Category NotSpecified
             throw $err
         }
+
+        $response = $apiResponse.Content
+
+        return [PSCustomObject]@{
+            IP                   = $response.ip
+            ASN                  = $response.asn
+            ASN_Name             = $response.as_name
+            ASN_Domain           = $response.as_domain
+            Country              = $response.country
+            Country_Code         = $response.country_code
+            Country_Flag_Emoji   = $flags[$response.country_code].Emoji
+            Country_Flag_Unicode = $flags[$response.country_code].unicode
+            Continent            = $response.continent
+            Continent_Code       = $response.continent_code
+            CacheHit             = $false
+        }
     }
 
-    # Validate input IP
-    if (Test-BogonIP -IPAddress $ip) {
-        $err = New-ErrorRecord  `
+    # Validate IP format
+    $ipObj = $null
+    if (-not [System.Net.IPAddress]::TryParse($ip, [ref]$ipObj)) {
+        $err = New-ErrorRecord `
+            -ErrorId "INPUT_ERR_INVALID_IP" `
+            -Message "The provided IP address $ip is not in a valid IPv4 or IPv6 format." `
+            -TargetObject $ip `
+            -Category InvalidData
+        throw $err
+    }
+
+    # Validate input IP is not a bogon
+    if (Test-BogonIP -IPAddress $ipObj) {
+        $err = New-ErrorRecord `
             -ErrorId "INPUT_ERR_BOGON" `
-            -Message "The IP address $ip is a bogon (reserved or non-routable). Only public IP addresses can be queried for geolocation." `
+            -Message "The provided IP address $ip is classified as a bogon (non-routable or reserved) and is excluded from querying." `
             -TargetObject $ip `
             -Category InvalidData
         throw $err
@@ -597,11 +609,12 @@ function Get-IPInfoLiteEntry {
     # Use cache for normal IP lookups
     $cache = $script:QueryCache
 
-        if ($cache.ContainsKey($ip)) {
-            $cached = $cache.Get($ip) | Select-Object * -ExcludeProperty CacheHit
-            $cached | Add-Member -NotePropertyName 'CacheHit' -NotePropertyValue $true
-            return $cached
-        }
+    $cached = $cache.Get($ip)
+    if ($null -ne $cached) {
+        $clone = $cached.PSObject.Copy()
+        $clone.CacheHit = $true
+        return $clone
+    }
     
     try {
         $url = "$($script:config.api.baseUrl)$ip"
@@ -611,36 +624,45 @@ function Get-IPInfoLiteEntry {
             Authorization = "Bearer $token"
         }
 
-        $response = Invoke-RestMethod -Uri $url -Method Get -Headers $requestHeaders
+        $apiResponse = Invoke-RestRequest -Uri $url -Method GET -Headers $requestHeaders
+
+        if (-not $apiResponse.Success) {
+            $err = New-ErrorRecord `
+                -ErrorId "ERR_API_FAILURE" `
+                -Message "External API request failed for IP $ip. Status code: $($apiResponse.StatusCode)." `
+                -TargetObject $url `
+                -Category NotSpecified
+            throw $err
+        }
+
+        $response = $apiResponse.Content
 
         $result = [PSCustomObject]@{
-            IP                      = $response.ip
-            ASN                     = $response.asn
-            ASN_Name                = $response.as_name
-            ASN_Domain              = $response.as_domain
-            Country                 = $response.country
-            Country_Code            = $response.country_code
-            Country_Flag_Emoji      = $flags[$response.country_code].Emoji
-            Country_Flag_Unicode    = $flags[$response.country_code].unicode
-            Continent               = $response.continent
-            Continent_Code          = $response.continent_code
-            CacheHit                = $false
+            IP                   = $response.ip
+            ASN                  = $response.asn
+            ASN_Name             = $response.as_name
+            ASN_Domain           = $response.as_domain
+            Country              = $response.country
+            Country_Code         = $response.country_code
+            Country_Flag_Emoji   = $flags[$response.country_code].Emoji
+            Country_Flag_Unicode = $flags[$response.country_code].unicode
+            Continent            = $response.continent
+            Continent_Code       = $response.continent_code
+            CacheHit             = $false
         }
 
         $cache.Add($ip, $result)
         return $result
 
     } catch {
-
-        $err = New-ErrorRecord  `
-            -ErrorId "ERR_API_FAILURE"  `
-            -Message "External API request failed due to a possible timeout, network error, invalid token, or unexpected response."  `
-            -TargetObject "$($script:config.api.baseUrl)$ip" `
+        $err = New-ErrorRecord `
+            -ErrorId "ERR_API_FAILURE" `
+            -Message "External API request failed for IP $ip. Status code: $($apiResponse.StatusCode)." `
+            -TargetObject $url `
             -Category NotSpecified
         Write-Error -ErrorRecord $err
     }
 }
-
 
 function Get-IPInfoLiteBatch {
     <#
@@ -739,7 +761,7 @@ function Get-IPInfoLiteBatch {
         }
 
         #Skip bogon IPs
-        if (Test-BogonIP -IPAddress $trimmed) {
+        if (Test-BogonIP -IPAddress $ipObj) {
             $err = New-ErrorRecord  `
                 -ErrorId "INPUT_ERR_BOGON" `
                 -Message "The provided IP address $($trimmed) is classified as a bogon (non-routable or reserved) and is excluded from querying." `
@@ -749,25 +771,23 @@ function Get-IPInfoLiteBatch {
             continue
         }
 
-        # Cached result handling with duplicate suppression.
-        # $ProcessedCacheIPs ensures each cached IP is added to $results only once per execution
-        if ($cache.ContainsKey($trimmed)) {
-        
-            if (-not $ProcessedCacheIPs.Contains($trimmed)) {
-                $cached = $cache.Get($trimmed) | Select-Object * -ExcludeProperty CacheHit
-                $cached | Add-Member -NotePropertyName 'CacheHit' -NotePropertyValue $true
-                [void]$results.Add($cached) 
+        # HashSet checked first, PSObject.Copy(), 
+        # ProcessedCacheIPs.Add() on both hit and miss paths
+        if ($ProcessedCacheIPs.Contains($trimmed)) {
+            continue
+    }
 
-                # Mark this IP as processed from cache
-                # Cast Void to avoid leakage into pipeline
-                [void]$ProcessedCacheIPs.Add($trimmed)
-            }
-
+        $cached = $cache.Get($trimmed)
+        if ($null -ne $cached) {
+            $clone = $cached.PSObject.Copy()
+            $clone.CacheHit = $true
+            [void]$results.Add($clone)
+            [void]$ProcessedCacheIPs.Add($trimmed)
             continue
         }
 
-        # If we got here, it's a valid, routable, uncached IP
-        $validIps.Add($trimmed)
+    $validIps.Add($trimmed)
+    [void]$ProcessedCacheIPs.Add($trimmed)
 }
 
     # Deduplicate in place
@@ -786,9 +806,24 @@ function Get-IPInfoLiteBatch {
         Authorization = "Bearer $token"
     }
 
+# Calculate totals before loop for accurate progress reporting
+    $totalIPs     = $validIps.Count
+    $totalChunks  = [math]::Ceiling($totalIPs / $script:config.processing.chunkSize)
+    $currentChunk = 0
+    $processedIPs = 0
+
     for ($i = 0; $i -lt $validIps.Count; $i += $script:config.processing.chunkSize) {
+        $currentChunk++
         $size  = [Math]::Min($script:config.processing.chunkSize, $validIps.Count - $i)
         $chunk = $validIps.GetRange($i, $size)
+
+        # Update progress bar - visible in interactive sessions only
+        # Write-Progress is ignored by non-interactive automation hosts
+        Write-Progress -Activity "IPInfoLite - Batch IP Lookup" `
+                       -Status "Chunk $currentChunk of $totalChunks - $processedIPs of $totalIPs IPs processed" `
+                       -PercentComplete ([math]::Round(($processedIPs / $totalIPs) * 100, 1))
+
+        Write-Verbose "IPInfoLite - Batch IP Lookup: Chunk $currentChunk of $totalChunks ($processedIPs of $totalIPs IPs processed)"
 
         # Prepend 'lite/' to each IP for API call
         $patterns = $chunk | ForEach-Object { "lite/$_" }
@@ -803,41 +838,35 @@ function Get-IPInfoLiteBatch {
                                         -Body $body `
                                         -Headers $requestHeaders
 
-      
         if (-not $response.Success) {
-      
             switch ($response.StatusCode) {
                 429 {
-                    $batchErrorId           = "HTTP_ERR_TOO_MANY_REQUESTS"
-                    $batchErrorCategory     = "ResourceBusy"
-                    $batchMessage           = "The API request failed with status code 429 (Too Many Requests) after repeated backoff and retry attempts."
+                    $batchErrorId       = "HTTP_ERR_TOO_MANY_REQUESTS"
+                    $batchErrorCategory = "ResourceBusy"
+                    $batchMessage       = "The API request failed with status code 429 (Too Many Requests) after repeated backoff and retry attempts."
                 }
-
                 {$_ -ge 500 -and $_ -lt 600} {
-                    $batchErrorId           = "HTTP_ERR_SERVER_ERROR"
-                    $batchErrorCategory     = "ResourceUnavailable"
-                    
-                     if ($response.StatusCode -in 502,503,504) {
+                    $batchErrorId       = "HTTP_ERR_SERVER_ERROR"
+                    $batchErrorCategory = "ResourceUnavailable"
+                    if ($response.StatusCode -in 502,503,504) {
                         $batchMessage   = "The API request failed with status code $($response.StatusCode) (Server Error) after repeated backoff and retry attempts."
-                    } else { 
+                    } else {
                         $batchMessage   = "The API request failed with status code $($response.StatusCode) (Server Error)."
                     }
                 }
-
                 Default {
-                    $batchErrorId           = "HTTP_ERR_UNHANDLED_STATUS_CODE"
-                    $batchErrorCategory     = "NotSpecified"
-                    $batchMessage           = "The API request failed with unhandled status code $($response.StatusCode)."
+                    $batchErrorId       = "HTTP_ERR_UNHANDLED_STATUS_CODE"
+                    $batchErrorCategory = "NotSpecified"
+                    $batchMessage       = "The API request failed with unhandled status code $($response.StatusCode)."
                 }
             }
 
-            
             foreach ($ip in $chunk) {
-                $err = New-ErrorRecord  `
+                $err = New-ErrorRecord `
                     -ErrorId $batchErrorId `
-                    -Message $batchMessage  `
+                    -Message $batchMessage `
                     -TargetObject $ip `
-                    -Category $batchErrorCategory 
+                    -Category $batchErrorCategory
                 Write-Error -ErrorRecord $err
             }
 
@@ -846,7 +875,7 @@ function Get-IPInfoLiteBatch {
 
         # Process each property in the response.Content
         foreach ($prop in $response.Content.PSObject.Properties) {
-        $json = $prop.Value
+            $json = $prop.Value
 
             # Build normalized result object
             $result = [PSCustomObject]@{
@@ -865,7 +894,14 @@ function Get-IPInfoLiteBatch {
             $cache.Add($json.ip, $result)
             $results.Add($result)
         }
+
+        # Update processed count after successful chunk completion
+        $processedIPs += $size
     }
+
+    # Clear progress bar from console on completion
+    Write-Progress -Activity "IPInfoLite - Batch IP Lookup" -Completed
+    Write-Verbose "IPInfoLite - Batch IP Lookup complete. $processedIPs of $totalIPs IPs processed successfully."
 
     return ,$results.ToArray()
 }
@@ -932,45 +968,49 @@ function Invoke-RestRequest {
         REST requests with retry/backoff logic. It is not exported from the module.
     #>
     [CmdletBinding()]
-param(
-    [Parameter(Mandatory)]
-    [string]$Uri,
+    param(
+        [Parameter(Mandatory)]
+        [string]$Uri,
     
-    [ValidateSet("GET","POST","PUT","DELETE","PATCH")]
-    [string]$Method = "GET",
+        [ValidateSet("GET","POST","PUT","DELETE","PATCH")]
+        [string]$Method = "GET",
 
-    [AllowNull()]
-    [object]$Body = $null,
+        [AllowNull()]
+        [object]$Body = $null,
     
-    [hashtable]$Headers = @{}, 
-    [string]$ContentType = "application/json",
+        [hashtable]$Headers = @{}, 
+        [string]$ContentType = "application/json",
 
-    # Defaults pulled from module config if not overridden
-    [int]$MaxRetries = $script:config.apiRetry.maxRetries,
-    [int]$BaseDelay  = $script:config.apiRetry.baseDelay
-)
+        # Defaults pulled from module config if not overridden
+        [int]$MaxRetries = $script:config.apiRetry.maxRetries,
+        [int]$BaseDelay  = $script:config.apiRetry.baseDelay
+    )
 
-# Hard safeguard for backoff (from module config only)
-$HardMaxBackoff = $script:config.apiRetry.hardMaxBackoff
+    # Hard safeguard for backoff (from module config only)
+    $HardMaxBackoff = $script:config.apiRetry.hardMaxBackoff
 
-$attempt = 0
-$statusCode = 0
-$lastErrorMessage = $null
+    $attempt          = 0
+    $statusCode       = 0
+    $lastErrorMessage = $null
 
-while ($attempt -lt $MaxRetries) {
-    $attempt++
-    try {
-        $response = Invoke-WebRequest -Uri $Uri `
-                                      -Method $Method `
-                                      -Body $Body `
-                                      -Headers $Headers `
-                                      -ContentType $ContentType `
-                                      -ErrorAction Stop
+    while ($attempt -lt $MaxRetries) {
+        $attempt++
+        $resp       = $null    # prevent $resp leaking between iterations
+        $statusCode = 0        # reset to consistent int type each iteration
+        $retryAfter = $null    # prevent Retry-After value leaking between iterations
+        try {
+            $response = Invoke-WebRequest -Uri $Uri `
+                                          -Method $Method `
+                                          -Body $Body `
+                                          -Headers $Headers `
+                                          -ContentType $ContentType `
+                                          -TimeoutSec $script:config.apiRetry.apiTimeoutSec `
+                                          -ErrorAction Stop
                                       
-        if ($response.StatusCode -eq 200) {
+        if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
             return [PSCustomObject]@{
                 Success    = $true
-                StatusCode = 200
+                StatusCode = $response.StatusCode
                 Content    = ($response.Content | ConvertFrom-Json)
             }
         }
@@ -981,12 +1021,11 @@ while ($attempt -lt $MaxRetries) {
             Content    = $null
         }
     }
+
     catch {
         # --- Unified cross-version error handling (PS 5.1 + 7+) ---
         $ex    = $_.Exception
         $inner = $ex.InnerException
-        $resp  = $null
-        $statusCode = $null
 
         # --- PowerShell 7+ ---
         if (
@@ -994,7 +1033,17 @@ while ($attempt -lt $MaxRetries) {
             ($inner -and $inner.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException')
         ) {
             $resp = if ($ex.Response) { $ex.Response } elseif ($inner -and $inner.Response) { $inner.Response } else { $null }
-            if ($resp) { $statusCode = [int]$resp.StatusCode.value__ }
+            if ($resp) {
+                $statusCode = [int]$resp.StatusCode.value__
+
+                # PS 7+ HttpResponseMessage uses HttpResponseHeaders which does not
+                # support string indexer access. TryGetValues handles missing headers
+                # safely without throwing and returns the first value if present.
+                $retryValues = $null
+                if ($resp.Headers.TryGetValues("Retry-After", [ref]$retryValues)) {
+                    $retryAfter = $retryValues | Select-Object -First 1
+                }
+            }
         }
 
         # --- PowerShell 5.1 (WebCmdletWebResponseException) ---
@@ -1003,7 +1052,11 @@ while ($attempt -lt $MaxRetries) {
             ($inner -and $inner.GetType().FullName -eq 'Microsoft.PowerShell.Commands.WebCmdletWebResponseException')
         ) {
             $resp = if ($ex.Response) { $ex.Response } elseif ($inner -and $inner.Response) { $inner.Response } else { $null }
-            if ($resp) { $statusCode = [int]$resp.StatusCode }
+            if ($resp) {
+                $statusCode = [int]$resp.StatusCode
+                # PS 5.1 WebHeaderCollection supports string indexer directly
+                $retryAfter = $resp.Headers["Retry-After"]
+            }
         }
 
         # --- PowerShell 5.1 (plain .NET WebException) ---
@@ -1011,17 +1064,18 @@ while ($attempt -lt $MaxRetries) {
             $resp = $ex.Response
             if ($resp -and $resp -is [System.Net.HttpWebResponse]) {
                 $statusCode = [int]$resp.StatusCode
+                # WebHeaderCollection supports string indexer directly
+                $retryAfter = $resp.Headers["Retry-After"]
             }
         }
 
         # --- Network failure (no HTTP response) ---
         if (-not $resp) {
             $lastErrorMessage = $ex.Message
-            $statusCode     = -1   # <-- flag for network-level failure (not HTTP)
-            $maxDelay       = [math]::Pow(2, $attempt - 1) * $BaseDelay
-            $maxDelay       = [math]::Min($maxDelay, $HardMaxBackoff)
-            $delay          = Get-Random -Minimum 0 -Maximum ($maxDelay + 1)
-            $delayDisplay   = [math]::Round($delay, 2)
+            $statusCode       = -1   # <-- flag for network-level failure (not HTTP)
+            $maxDelay         = [int][math]::Min([math]::Pow(2, $attempt - 1) * $BaseDelay, $HardMaxBackoff)
+            $delay            = Get-Random -Minimum 0 -Maximum ($maxDelay + 1)
+            $delayDisplay     = [math]::Round($delay, 2)
             Write-Warning "Network connectivity issue while contacting the API on attempt ${attempt}: $($ex.Message). Retrying in $delayDisplay seconds..."
             Start-Sleep -Seconds $delay
             continue
@@ -1033,7 +1087,6 @@ while ($attempt -lt $MaxRetries) {
     # --- Unified error handling (PS5 + PS7) ---
     switch ($statusCode) {
         429 {
-            $retryAfter = $resp.Headers["Retry-After"]
             if ($retryAfter) {
                 if ($retryAfter -as [int]) {
                     $delay          = [int]$retryAfter
@@ -1046,8 +1099,7 @@ while ($attempt -lt $MaxRetries) {
                     Write-Warning "API rate limit reached (HTTP 429). Waiting until $retryDate ($delayDisplay seconds)."
                 }
             } else {
-                $maxDelay       = [math]::Pow(2, $attempt - 1) * $BaseDelay
-                $maxDelay       = [math]::Min($maxDelay, $HardMaxBackoff)
+                $maxDelay       = [int][math]::Min([math]::Pow(2, $attempt - 1) * $BaseDelay, $HardMaxBackoff)
                 $delay          = Get-Random -Minimum 0 -Maximum ($maxDelay + 1)
                 $delayDisplay   = [math]::Round($delay, 2)
                 Write-Warning "API rate limit reached (HTTP 429) with no Retry-After. Backing off $delayDisplay seconds."
@@ -1063,8 +1115,7 @@ while ($attempt -lt $MaxRetries) {
             }
         }
         {$_ -in 502,503,504} {
-            $maxDelay       = [math]::Pow(2, $attempt - 1) * $BaseDelay
-            $maxDelay       = [math]::Min($maxDelay, $HardMaxBackoff)
+            $maxDelay       = [int][math]::Min([math]::Pow(2, $attempt - 1) * $BaseDelay, $HardMaxBackoff)
             $delay          = Get-Random -Minimum 0 -Maximum ($maxDelay + 1)
             $delayDisplay   = [math]::Round($delay, 2)
             Write-Warning "Transient API error (HTTP $statusCode) detected on attempt ${attempt}. Retrying in $delayDisplay seconds."
@@ -1126,16 +1177,40 @@ function Initialize-BogonRanges {
     $filePath = Join-Path $PSScriptRoot 'Resources\bogonRanges.json'
 
     if (-not (Test-Path $filePath)) {
-        throw "Bogon range data file not found: $filePath"
+        $err = New-ErrorRecord `
+            -ErrorId "ERR_BOGON_FILE_NOT_FOUND" `
+            -Message "Bogon range data file not found: $filePath" `
+            -TargetObject $filePath `
+            -Category ResourceUnavailable
+        throw $err
     }
 
-    $jsonData = Get-Content $filePath -Raw | ConvertFrom-Json
+    # Read the ranges array from within the new structured JSON format
+    $jsonData = (Get-Content $filePath -Raw | ConvertFrom-Json).ranges
 
-    return $jsonData | ForEach-Object {
-        [PSCustomObject]@{
-            Network      = [System.Net.IPAddress]::Parse($_.Network)
-            PrefixLength = $_.PrefixLength
+    $ipv4Ranges = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $ipv6Ranges = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+    foreach ($entry in $jsonData) {
+        $range = [PSCustomObject]@{
+            Network      = [System.Net.IPAddress]::Parse($entry.Network)
+            PrefixLength = $entry.PrefixLength
+            Description  = $entry.Description
+            RFC          = $entry.RFC
         }
+
+        # Use the AddressFamily field from the JSON directly
+        # rather than determining it at runtime from the parsed address
+        if ($entry.AddressFamily -eq "IPv4") {
+            $ipv4Ranges.Add($range)
+        } else {
+            $ipv6Ranges.Add($range)
+        }
+    }
+
+    return [PSCustomObject]@{
+        IPv4 = $ipv4Ranges
+        IPv6 = $ipv6Ranges
     }
 }
 
@@ -1143,17 +1218,19 @@ function Test-BogonIP {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
-        [string]$IPAddress
+        [System.Net.IPAddress]$IPAddress
     )
 
-    $parsedIP = $null
-    if (-not [System.Net.IPAddress]::TryParse($IPAddress, [ref]$parsedIP)) {
-        Write-Warning "Invalid IP address format: $IPAddress"
-        return $false
+    # Select the appropriate range list based on address family
+    # eliminating iteration over ranges that cannot match
+    $rangesToCheck = if ($IPAddress.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork) {
+        $Script:BogonRangesIPv4
+    } else {
+        $Script:BogonRangesIPv6
     }
 
-    foreach ($range in $Script:BogonRanges) {
-        if (Test-IPInCIDR -IPAddress $parsedIP -Network $range.Network -PrefixLength $range.PrefixLength) {
+    foreach ($range in $rangesToCheck) {
+        if (Test-IPInCIDR -IPAddress $IPAddress -Network $range.Network -PrefixLength $range.PrefixLength) {
             return $true
         }
     }
@@ -1161,22 +1238,31 @@ function Test-BogonIP {
     return $false
 }
 
-
 function Test-IPInCIDR {
+    [CmdletBinding()]
     param (
+        [Parameter(Mandatory)]
         [System.Net.IPAddress]$IPAddress,
+
+        [Parameter(Mandatory)]
         [System.Net.IPAddress]$Network,
+
+        [Parameter(Mandatory)]
+        [ValidateRange(0, 128)]
         [int]$PrefixLength
     )
 
     $ipBytes  = $IPAddress.GetAddressBytes()
     $netBytes = $Network.GetAddressBytes()
 
+    # Address family mismatch - IPv4 has 4 bytes, IPv6 has 16
+    # A mismatch means the IP cannot belong to this network range
     if ($ipBytes.Length -ne $netBytes.Length) {
         return $false
     }
 
-    $fullBytes = [math]::Floor($PrefixLength / 8)
+    # Compare full bytes first - each full byte covers 8 bits of the prefix
+    $fullBytes     = [math]::Floor($PrefixLength / 8)
     $remainingBits = $PrefixLength % 8
 
     for ($i = 0; $i -lt $fullBytes; $i++) {
@@ -1185,6 +1271,10 @@ function Test-IPInCIDR {
         }
     }
 
+    # Handle the partial byte if the prefix length is not a multiple of 8.
+    # Build a mask for the significant bits only.
+    # e.g. remainingBits=6 -> 0xFF << 2 -> 11111100
+    # Applied to both IP and network bytes to compare only the significant bits
     if ($remainingBits -gt 0) {
         $mask = 0xFF -shl (8 - $remainingBits)
         if (($ipBytes[$fullBytes] -band $mask) -ne ($netBytes[$fullBytes] -band $mask)) {
@@ -1203,10 +1293,24 @@ function Initialize-CountryFlagTable {
     $filePath = Join-Path $PSScriptRoot 'Resources\countries_flags.json'
 
     if (-not (Test-Path -Path $filePath)) {
-        throw "The file '$filePath' does not exist. Ensure the JSON file is present in the 'Resources' folder relative to the script location."
+        $err = New-ErrorRecord `
+            -ErrorId "ERR_FLAGS_FILE_NOT_FOUND" `
+            -Message "Country flag data file not found: $filePath. Ensure the JSON file is present in the 'Resources' folder relative to the script location." `
+            -TargetObject $filePath `
+            -Category ResourceUnavailable
+        throw $err
     }
 
     $jsonContent = Get-Content -Raw -Path $filePath | ConvertFrom-Json
+
+    if (-not $jsonContent) {
+        $err = New-ErrorRecord `
+            -ErrorId "ERR_FLAGS_FILE_EMPTY" `
+            -Message "Country flag data file is empty or could not be parsed: $filePath" `
+            -TargetObject $filePath `
+            -Category InvalidData
+        throw $err
+    }
 
     $countryFlagTable = @{}
 
@@ -1227,7 +1331,9 @@ function Initialize-CountryFlagTable {
 $script:QueryCache = [QueryCache]::new($script:config.cache.cacheLimit)
 
 # Initialize static bogon range cache
-$Script:BogonRanges = Initialize-BogonRanges
+$bogonRanges             = Initialize-BogonRanges
+$Script:BogonRangesIPv4  = $bogonRanges.IPv4
+$Script:BogonRangesIPv6  = $bogonRanges.IPv6
 
 # Initialize Country Flag Table
 $Script:flags = Initialize-CountryFlagTable
